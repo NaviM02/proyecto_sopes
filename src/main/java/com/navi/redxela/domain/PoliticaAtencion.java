@@ -22,7 +22,7 @@ public enum PoliticaAtencion {
     }
 
     public Comparator<Pedido> comparador() {
-        Instant ahora = Instant.now();
+        Instant ahora = TiempoSimulado.ahora();
         return switch (this) {
             case PRIORIDAD -> Comparator.comparingInt((Pedido p) -> p.getCliente().nivelServicio().getOrden())
                     .thenComparing(Pedido::getCreadoEn);

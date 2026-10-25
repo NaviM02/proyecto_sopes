@@ -11,7 +11,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 final class ModeloPedidos extends AbstractTableModel {
-    private final String[] columnas = {"Pedido", "Cliente", "Servicio", "Unidades", "Mercancía", "Estado", "Progreso (%)", "Restante", "Espera"};
+    private final String[] columnas = {"Pedido", "Cliente", "Servicio", "Producto(s) y cantidad", "Unidades", "Mercancía", "Estado", "Progreso (%)", "Restante", "Espera"};
     private List<Pedido> pedidos = List.of();
 
     public void actualizar(List<Pedido> pedidos) {
@@ -37,7 +37,7 @@ final class ModeloPedidos extends AbstractTableModel {
     @Override
     public Class<?> getColumnClass(int columnIndex) {
         return switch (columnIndex) {
-            case 3, 6 -> Integer.class;
+            case 4, 7 -> Integer.class;
             default -> String.class;
         };
     }
@@ -49,12 +49,13 @@ final class ModeloPedidos extends AbstractTableModel {
             case 0 -> pedido.getId();
             case 1 -> pedido.getCliente().nombre();
             case 2 -> pedido.getCliente().nivelServicio().getNombre();
-            case 3 -> pedido.getCantidadTotal();
-            case 4 -> pedido.getResumenMercancia();
-            case 5 -> pedido.getEstado().getNombre();
-            case 6 -> pedido.getProgreso();
-            case 7 -> duracion(pedido.getTiempoRestanteEstimadoMs());
-            case 8 -> duracion(pedido.getTiempoEsperaMs());
+            case 3 -> pedido.getResumenProductos();
+            case 4 -> pedido.getCantidadTotal();
+            case 5 -> pedido.getResumenMercancia();
+            case 6 -> pedido.getEstado().getNombre();
+            case 7 -> pedido.getProgreso();
+            case 8 -> duracion(pedido.getTiempoRestanteEstimadoMs());
+            case 9 -> duracion(pedido.getTiempoEsperaMs());
             default -> "";
         };
     }
@@ -154,7 +155,7 @@ final class ModeloRecursos extends AbstractTableModel {
 }
 
 final class ModeloInventario extends AbstractTableModel {
-    private final String[] columnas = {"Producto", "Mercancía", "Disponibles", "Reservadas", "Ubicaciones físicas"};
+    private final String[] columnas = {"Producto", "Mercancía", "Disponibles", "En proceso", "Ubicaciones físicas"};
     private List<ResumenProducto> productos = List.of();
 
     public void actualizar(List<ResumenProducto> productos) {

@@ -10,6 +10,7 @@ import com.navi.redxela.domain.Producto;
 import com.navi.redxela.domain.Recurso;
 import com.navi.redxela.domain.ResumenRecurso;
 import com.navi.redxela.domain.TipoMercancia;
+import com.navi.redxela.domain.TiempoSimulado;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -48,6 +49,7 @@ public final class MotorDistribucion implements AutoCloseable {
         return hilo;
     });
     private final AtomicInteger consecutivoCliente = new AtomicInteger(5);
+    private final AtomicInteger turnoGenerador = new AtomicInteger();
     private final AtomicLong completados = new AtomicLong();
     private volatile PoliticaAtencion politica = PoliticaAtencion.PRIORIDAD;
     private volatile ScheduledFuture<?> tareaGenerador;
@@ -125,6 +127,15 @@ public final class MotorDistribucion implements AutoCloseable {
         notificarCambio();
     }
 
+    public double getAcelerador() {
+        return TiempoSimulado.getAcelerador();
+    }
+
+    public void setAcelerador(double acelerador) {
+        TiempoSimulado.setAcelerador(acelerador);
+        notificarCambio();
+    }
+
     public boolean isGeneradorActivo() {
         return tareaGenerador != null && !tareaGenerador.isCancelled();
     }
@@ -134,7 +145,7 @@ public final class MotorDistribucion implements AutoCloseable {
             return;
         }
         tareaGenerador = generador.scheduleWithFixedDelay(this::generarPedidoAleatorio,
-                1, 4, TimeUnit.SECONDS);
+                1, 1, TimeUnit.SECONDS);
     }
 
     public synchronized void detenerGenerador() {
@@ -221,10 +232,16 @@ public final class MotorDistribucion implements AutoCloseable {
     private void procesarPedido(Pedido pedido, Set<Recurso> necesarios, InventarioService.Reserva reserva) {
         boolean terminado = false;
         try {
-            long duracionMs = Math.min(15_000, 450L + pedido.getCantidadTotal() * 320L);
+            // Este trabajador representa el tiempo de ocupación de las estaciones, escalado por el reloj simulado.
+            long duracionMs = Math.min(300_000, 15_000L + pedido.getCantidadTotal() * 20_000L);
             long inicio = System.nanoTime();
+            long transcurridoSimulado = 0;
+            long ultimaMuestra = inicio;
             while (true) {
-                long transcurrido = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - inicio);
+                long ahora = System.nanoTime();
+                transcurridoSimulado += (long) ((ahora - ultimaMuestra) * TiempoSimulado.getAcelerador());
+                ultimaMuestra = ahora;
+                long transcurrido = TimeUnit.NANOSECONDS.toMillis(transcurridoSimulado);
                 int progreso = (int) Math.min(99, transcurrido * 100 / duracionMs);
                 pedido.actualizarProgreso(progreso);
                 if (transcurrido >= duracionMs) {
@@ -255,9 +272,9 @@ public final class MotorDistribucion implements AutoCloseable {
         try {
             List<Cliente> cuentas = clientes;
             List<Producto> productos = CatalogoProductos.obtenerProductos();
-            Cliente cliente = cuentas.get(ThreadLocalRandom.current().nextInt(cuentas.size()));
+            Cliente cliente = cuentas.get(Math.floorMod(turnoGenerador.getAndIncrement(), cuentas.size()));
             Producto producto = productos.get(ThreadLocalRandom.current().nextInt(productos.size()));
-            int cantidad = ThreadLocalRandom.current().nextInt(1, 5);
+            int cantidad = ThreadLocalRandom.current().nextInt(2, 9);
             registrarPedido(cliente, List.of(new ArticuloPedido(producto, cantidad)));
         } catch (RuntimeException ex) {
             // Si una llegada sale mal, el siguiente ciclo del generador sigue funcionando.

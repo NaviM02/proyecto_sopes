@@ -27,7 +27,7 @@ public final class Pedido {
             throw new IllegalArgumentException("El pedido debe incluir al menos un artículo.");
         }
         this.articulos = List.copyOf(articulos);
-        this.creadoEn = Instant.now();
+        this.creadoEn = TiempoSimulado.ahora();
         this.estado = EstadoPedido.EN_ESPERA;
     }
 
@@ -67,10 +67,17 @@ public final class Pedido {
                 .orElse("Sin mercancía");
     }
 
+    public String getResumenProductos() {
+        return articulos.stream()
+                .map(a -> a.producto().nombre() + " ×" + a.cantidad())
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("Sin productos");
+    }
+
     public synchronized void actualizarEstado(EstadoPedido nuevoEstado) {
         estado = Objects.requireNonNull(nuevoEstado);
         if (nuevoEstado == EstadoPedido.EN_PROCESO && iniciadoEn == null) {
-            iniciadoEn = Instant.now();
+            iniciadoEn = TiempoSimulado.ahora();
         }
     }
 
@@ -81,11 +88,11 @@ public final class Pedido {
     public synchronized void completar() {
         progreso = 100;
         estado = EstadoPedido.COMPLETADO;
-        completadoEn = Instant.now();
+        completadoEn = TiempoSimulado.ahora();
     }
 
     public synchronized long getTiempoEsperaMs() {
-        Instant finEspera = iniciadoEn == null ? Instant.now() : iniciadoEn;
+        Instant finEspera = iniciadoEn == null ? TiempoSimulado.ahora() : iniciadoEn;
         return Math.max(0, Duration.between(creadoEn, finEspera).toMillis());
     }
 
@@ -93,7 +100,7 @@ public final class Pedido {
         if (iniciadoEn == null) {
             return 0;
         }
-        Instant fin = completadoEn == null ? Instant.now() : completadoEn;
+        Instant fin = completadoEn == null ? TiempoSimulado.ahora() : completadoEn;
         return Math.max(0, Duration.between(iniciadoEn, fin).toMillis());
     }
 
@@ -101,7 +108,8 @@ public final class Pedido {
         if (estado != EstadoPedido.EN_PROCESO) {
             return 0;
         }
-        long duracionEstimada = Math.min(15_000, 450L + getCantidadTotal() * 320L);
-        return Math.max(0, duracionEstimada * (100 - progreso) / 100);
+        long duracionEstimada = Math.min(300_000, 15_000L + getCantidadTotal() * 20_000L);
+        return Math.max(0, (long) (duracionEstimada * (100 - progreso)
+                / 100.0 / TiempoSimulado.getAcelerador()));
     }
 }

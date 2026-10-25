@@ -17,6 +17,7 @@ final class VistaPedidos extends JPanel {
     private final MotorDistribucion motor;
     private final ModeloPedidos modelo = new ModeloPedidos();
     private final JComboBox<PoliticaAtencion> politica = new JComboBox<>(PoliticaAtencion.values());
+    private final JComboBox<Double> acelerador = new JComboBox<>(new Double[]{1.0, 2.0, 3.0, 5.0, 10.0});
     private final JLabel descripcionPolitica = UIStyles.subtitulo("");
     private final JLabel estadoGenerador = UIStyles.subtitulo("Llegadas automáticas detenidas.");
     private final javax.swing.JButton botonGenerador = UIStyles.botonVerde("Iniciar generador");
@@ -25,6 +26,8 @@ final class VistaPedidos extends JPanel {
         this.motor = motor;
         construirVista();
         politica.setSelectedItem(motor.getPolitica());
+        acelerador.setEditable(true);
+        acelerador.setSelectedItem(motor.getAcelerador());
         descripcionPolitica.setText(motor.getPolitica().getDescripcion());
         actualizar();
     }
@@ -84,6 +87,10 @@ final class VistaPedidos extends JPanel {
             }
         });
         selector.add(politica);
+        selector.add(new JLabel("Velocidad (×)"));
+        acelerador.setPreferredSize(new java.awt.Dimension(82, 34));
+        acelerador.addActionListener(e -> aplicarAcelerador());
+        selector.add(acelerador);
         controles.add(selector, BorderLayout.WEST);
         JPanel descripcion = new JPanel(new BorderLayout(0, 5));
         descripcion.setOpaque(false);
@@ -106,12 +113,35 @@ final class VistaPedidos extends JPanel {
 
         JTable tabla = new JTable(modelo);
         UIStyles.estilizarTabla(tabla);
-        tabla.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
-        tabla.getColumnModel().getColumn(0).setPreferredWidth(110);
-        tabla.getColumnModel().getColumn(1).setPreferredWidth(130);
-        tabla.getColumnModel().getColumn(4).setPreferredWidth(125);
+        tabla.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        tabla.getColumnModel().getColumn(0).setPreferredWidth(130);
+        tabla.getColumnModel().getColumn(1).setPreferredWidth(140);
+        tabla.getColumnModel().getColumn(2).setPreferredWidth(125);
+        tabla.getColumnModel().getColumn(3).setPreferredWidth(240);
+        tabla.getColumnModel().getColumn(4).setPreferredWidth(75);
+        tabla.getColumnModel().getColumn(5).setPreferredWidth(135);
+        tabla.getColumnModel().getColumn(6).setPreferredWidth(145);
+        tabla.getColumnModel().getColumn(7).setPreferredWidth(95);
+        tabla.getColumnModel().getColumn(8).setPreferredWidth(95);
+        tabla.getColumnModel().getColumn(9).setPreferredWidth(95);
         cuerpo.add(UIStyles.panelConTitulo("Registro de pedidos", "El estado y el tiempo de espera se actualizan durante la simulación.",
                 UIStyles.scrollTabla(tabla)), BorderLayout.CENTER);
         add(cuerpo, BorderLayout.CENTER);
+    }
+
+    private void aplicarAcelerador() {
+        Object valor = acelerador.getEditor().getItem();
+        try {
+            String texto = valor.toString().trim().replace(',', '.').replace("×", "");
+            double factor = Double.parseDouble(texto);
+            motor.setAcelerador(factor);
+            acelerador.setToolTipText(String.format(java.util.Locale.ROOT,
+                    "×%.2f: el tiempo simulado avanza %.2f veces más rápido", factor, factor));
+        } catch (IllegalArgumentException ex) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "Escribe un acelerador entre ×1 y ×100.", "Acelerador no válido",
+                    javax.swing.JOptionPane.WARNING_MESSAGE);
+            acelerador.setSelectedItem(motor.getAcelerador());
+        }
     }
 }

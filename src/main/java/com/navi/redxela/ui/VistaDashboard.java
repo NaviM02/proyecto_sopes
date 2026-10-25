@@ -78,7 +78,7 @@ final class VistaDashboard extends JPanel {
         UIStyles.estilizarTabla(tablaRecursos);
         JPanel recursos = UIStyles.panelConTitulo("Recursos compartidos", "Capacidad disponible y pedidos que los están utilizando.",
                 UIStyles.scrollTabla(tablaRecursos));
-        recursos.setPreferredSize(new java.awt.Dimension(800, 225));
+        recursos.setPreferredSize(new java.awt.Dimension(800, 330));
         contenido.add(recursos, BorderLayout.SOUTH);
         add(contenido, BorderLayout.CENTER);
     }

@@ -19,7 +19,6 @@ public final class InventarioService {
     private final List<Ubicacion> ubicaciones = new ArrayList<>();
     private final Map<String, Integer> disponibles = new HashMap<>();
     private final Map<String, LinkedHashMap<String, Integer>> ubicacionesPorProducto = new HashMap<>();
-    private int unidadesAlmacenadas;
     private int cursorUbicacion;
 
     public InventarioService() {
@@ -37,42 +36,57 @@ public final class InventarioService {
     }
 
     public synchronized int getUnidadesAlmacenadas() {
-        return unidadesAlmacenadas;
+        return contarUnidadesFisicas();
     }
 
     public synchronized int getUnidadesLibres() {
-        return capacidad - unidadesAlmacenadas;
+        return capacidad - contarUnidadesFisicas();
     }
 
     public synchronized String recibir(Producto producto, int cantidad) {
         if (cantidad <= 0) {
             return "La cantidad debe ser mayor que cero.";
         }
-        if (cantidad > capacidad - unidadesAlmacenadas) {
-            return "No hay espacio suficiente: quedan " + (capacidad - unidadesAlmacenadas) + " unidades libres.";
+        int almacenadas = contarUnidadesFisicas();
+        if (cantidad > capacidad - almacenadas) {
+            int libres = capacidad - almacenadas;
+            return "Recepción rechazada: solicitadas " + cantidad + " unidades; almacén ocupado "
+                    + almacenadas + "/" + capacidad + ", libres " + libres
+                    + ". Reduce la cantidad a " + libres + " o menos.";
         }
 
         int pendientes = cantidad;
-        LinkedHashMap<String, Integer> ubicacionesProducto = ubicacionesPorProducto.computeIfAbsent(
-                producto.codigo(), ignorado -> new LinkedHashMap<>());
+        List<Asignacion> plan = new ArrayList<>();
+        int siguienteCursor = cursorUbicacion;
         for (int paso = 0; paso < ubicaciones.size() && pendientes > 0; paso++) {
             int indice = (cursorUbicacion + paso * 7) % ubicaciones.size();
             Ubicacion ubicacion = ubicaciones.get(indice);
             int asignadas = Math.min(pendientes, ubicacion.capacidad - ubicacion.ocupacion);
             if (asignadas > 0) {
-                ubicacion.productos.merge(producto.codigo(), asignadas, Integer::sum);
-                ubicacion.ocupacion += asignadas;
-                ubicacionesProducto.merge(ubicacion.codigo, asignadas, Integer::sum);
+                plan.add(new Asignacion(ubicacion, asignadas));
                 pendientes -= asignadas;
-                cursorUbicacion = (indice + 1) % ubicaciones.size();
+                siguienteCursor = (indice + 1) % ubicaciones.size();
             }
         }
 
         if (pendientes > 0) {
-            return "No se pudo asignar la mercancía a una ubicación.";
+            return "Recepción rechazada sin cambios: quedan " + (capacidad - almacenadas)
+                    + " unidades libres, pero no se encontró espacio físico suficiente para ubicar "
+                    + cantidad + " unidades.";
         }
+
+        // Confirma la recepción solo después de comprobar que cabe completa.
+        LinkedHashMap<String, Integer> ubicacionesProducto = ubicacionesPorProducto.computeIfAbsent(
+                producto.codigo(), ignorado -> new LinkedHashMap<>());
+        for (Asignacion asignacion : plan) {
+            Ubicacion ubicacion = asignacion.ubicacion();
+            int unidades = asignacion.unidades();
+            ubicacion.productos.merge(producto.codigo(), unidades, Integer::sum);
+            ubicacion.ocupacion += unidades;
+            ubicacionesProducto.merge(ubicacion.codigo, unidades, Integer::sum);
+        }
+        cursorUbicacion = siguienteCursor;
         disponibles.merge(producto.codigo(), cantidad, Integer::sum);
-        unidadesAlmacenadas += cantidad;
         return "Recibidas " + cantidad + " unidades de " + producto.nombre() + ".";
     }
 
@@ -100,10 +114,17 @@ public final class InventarioService {
                             producto.codigo(), new LinkedHashMap<>());
                     int fisicas = porUbicacion.values().stream().mapToInt(Integer::intValue).sum();
                     String textoUbicaciones = porUbicacion.entrySet().stream()
-                            .map(e -> e.getKey() + " (" + e.getValue() + ")")
-                            .collect(Collectors.joining(", "));
+                            .map(e -> {
+                                Ubicacion ubicacion = ubicaciones.stream()
+                                        .filter(u -> u.codigo.equals(e.getKey())).findFirst().orElseThrow();
+                                return e.getKey() + ": " + e.getValue() + " uds (ubicación ocupada "
+                                        + ubicacion.ocupacion + "/" + ubicacion.capacidad + ")";
+                            })
+                            .collect(Collectors.joining("<br>"));
                     if (textoUbicaciones.isEmpty()) {
                         textoUbicaciones = "Sin ubicación";
+                    } else {
+                        textoUbicaciones = "<html>" + textoUbicaciones + "</html>";
                     }
                     int disponiblesProducto = disponibles.getOrDefault(producto.codigo(), 0);
                     return new ResumenProducto(producto, disponiblesProducto,
@@ -118,6 +139,10 @@ public final class InventarioService {
             requeridas.merge(articulo.producto().codigo(), articulo.cantidad(), Integer::sum);
         }
         return requeridas;
+    }
+
+    private int contarUnidadesFisicas() {
+        return ubicaciones.stream().mapToInt(ubicacion -> ubicacion.ocupacion).sum();
     }
 
     private void retirarUbicaciones(String codigoProducto, int cantidad) {
@@ -168,6 +193,9 @@ public final class InventarioService {
         }
     }
 
+    private record Asignacion(Ubicacion ubicacion, int unidades) {
+    }
+
     public final class Reserva {
         private final Map<String, Integer> cantidades;
         private boolean finalizada;
@@ -182,7 +210,6 @@ public final class InventarioService {
             }
             synchronized (InventarioService.this) {
                 cantidades.forEach((codigo, cantidad) -> retirarUbicaciones(codigo, cantidad));
-                unidadesAlmacenadas -= cantidades.values().stream().mapToInt(Integer::intValue).sum();
             }
             finalizada = true;
         }
